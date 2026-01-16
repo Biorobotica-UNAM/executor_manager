@@ -3,8 +3,8 @@
 <package format="3">
   <name>task_manager</name>
   <version>0.0.1</version>
-  <description>Paquete para parsear instrucciones de texto para robot Justina</description>
-  <maintainer email="jorge@todo.todo">Jorge Mendez</maintainer>
+  <description>Package to parse instruccions</description>
+  <maintainer email="georgemendez1000@gmail.com">Jorge Mendez</maintainer>
   <license>TODO</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
