@@ -5,18 +5,25 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(executor_interfaces REQUIRED) 
 
+add_executable(task_manager_node src/task_manager_node.cpp)
 
-add_executable(instruction_parser src/instruction_parser.cpp)
-ament_target_dependencies(instruction_parser rclcpp std_msgs)
-
+ament_target_dependencies(task_manager_node 
+  rclcpp 
+  std_msgs
+  std_srvs
+  rclcpp_action
+  executor_interfaces
+)
 
 install(TARGETS
-  instruction_parser
+  task_manager_node
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
