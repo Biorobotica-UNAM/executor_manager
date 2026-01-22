@@ -25,7 +25,7 @@ public:
   : Node("task_manager_node")
   {
     // 1. Service Client (To ASK for the instruction)
-    service_client_ = this->create_client<Trigger>("request_instruccion");
+    service_client_ = this->create_client<Trigger>("request_instruction");
 
     // 2. Action Client (To EXECUTE the task)
     action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "execute_task");
@@ -77,7 +77,7 @@ private:
     }
   }
 
-  TaskStep parse_instruction(const std::string & raw_str)
+  /*TaskStep parse_instruction(const std::string & raw_str)
   {
     TaskStep step;
     step.step_id = 1;         // You could use a global counter here
@@ -105,7 +105,44 @@ private:
     }
 
     return step;
+  }*/
+
+  TaskStep parse_instruction(const std::string & raw_str)
+{
+  TaskStep step;
+  step.step_id = 1;
+
+  std::stringstream ss(raw_str);
+
+  std::string agent_part, action_part;
+  if (!(ss >> agent_part >> action_part)) {
+    RCLCPP_WARN(this->get_logger(),
+      "Invalid instruction format. Expected: '<agent> <action> ...' Got: '%s'",
+      raw_str.c_str());
+    step.agent = "Justina";
+    step.action = "";
+    return step;
   }
+
+  step.agent = agent_part;
+  step.action = action_part;
+
+  // Guardar el resto como un solo string "tal cual" (sin cambiar living_room)
+  std::string args_joined;
+  std::string token;
+  while (ss >> token) {
+    if (!args_joined.empty()) args_joined += " ";
+    args_joined += token;
+  }
+
+  if (!args_joined.empty()) {
+    step.args.push_back(args_joined);
+  }
+
+  return step;
+}
+
+
 
   // --- STEP 3 (DETAIL): SEND GOAL ---
   void send_action_goal(const TaskStep & step_msg)
