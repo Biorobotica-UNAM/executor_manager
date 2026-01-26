@@ -26,12 +26,7 @@ public:
   TaskManagerNode()
   : Node("task_manager_node")
   {
-<<<<<<< HEAD
-    // 1. Service Client (To ASK for the instruction)
-    service_client_ = this->create_client<Trigger>("request_instruction");
-=======
     service_client_ = this->create_client<Trigger>("request_instruccion");
->>>>>>> 123a487 (Making task_manager_node working mor than one time)
 
     action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "execute_task");
 
@@ -118,7 +113,6 @@ private:
     return step;
   }
 
-<<<<<<< HEAD
   step.agent = agent_part;
   step.action = action_part;
 
@@ -140,8 +134,6 @@ private:
 
 
   // --- STEP 3 (DETAIL): SEND GOAL ---
-=======
->>>>>>> 123a487 (Making task_manager_node working mor than one time)
   void send_action_goal(const TaskStep & step_msg)
   {
     if (!action_client_->wait_for_action_server(2s)) {
