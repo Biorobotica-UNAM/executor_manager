@@ -7,6 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
+#include "std_msgs/msg/empty.hpp" 
 #include "std_srvs/srv/trigger.hpp"
 #include "executor_interfaces/msg/task_step.hpp"
 #include "executor_interfaces/action/execute_task.hpp"
@@ -16,6 +17,7 @@ using namespace std::chrono_literals;
 class TaskManagerNode : public rclcpp::Node
 {
 public:
+  using Empty = std_msgs::msg::Empty;
   using Trigger = std_srvs::srv::Trigger;
   using TaskStep = executor_interfaces::msg::TaskStep;
   using ExecuteTask = executor_interfaces::action::ExecuteTask;
@@ -24,52 +26,48 @@ public:
   TaskManagerNode()
   : Node("task_manager_node")
   {
+<<<<<<< HEAD
     // 1. Service Client (To ASK for the instruction)
     service_client_ = this->create_client<Trigger>("request_instruction");
+=======
+    service_client_ = this->create_client<Trigger>("request_instruccion");
+>>>>>>> 123a487 (Making task_manager_node working mor than one time)
 
-    // 2. Action Client (To EXECUTE the task)
     action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "execute_task");
 
-    RCLCPP_INFO(this->get_logger(), "TaskManagerNode initialized.");
+    subscription_ = this->create_subscription<Empty>(
+      "input_trigger", 10, std::bind(&TaskManagerNode::trigger_callback, this, std::placeholders::_1));
 
-    // We use a one-shot timer to start the workflow after 1 second,
-    // ensuring the node is fully initialized before making requests.
-    timer_ = this->create_wall_timer(
-      1s, std::bind(&TaskManagerNode::start_workflow, this));
+    RCLCPP_INFO(this->get_logger(), "TaskManagerNode initialized. Waiting for signal on topic '/input_trigger'...");
   }
 
 private:
-  // --- STEP 1: REQUEST INSTRUCTION ---
-  void start_workflow()
+  void trigger_callback(const Empty::SharedPtr msg)
   {
-    timer_->cancel(); // Execute only once
-    
-    // Wait for the service to be available
-    if (!service_client_->wait_for_service(2s)) {
-      RCLCPP_ERROR(this->get_logger(), "Service 'request_instruccion' not available.");
+    (void)msg;
+    RCLCPP_INFO(this->get_logger(), "Trigger received! Starting workflow...");
+
+    if (!service_client_->wait_for_service(1s)) {
+      RCLCPP_ERROR(this->get_logger(), "Service 'request_instruccion' is not available. Try again later.");
       return;
     }
 
     auto request = std::make_shared<Trigger::Request>();
     RCLCPP_INFO(this->get_logger(), "Calling service 'request_instruccion'...");
 
-    // Async call
-    auto future_result = service_client_->async_send_request(request, 
+    service_client_->async_send_request(request, 
       std::bind(&TaskManagerNode::service_response_callback, this, std::placeholders::_1));
   }
 
-  // --- STEP 2: RECEIVE AND PARSE ---
   void service_response_callback(rclcpp::Client<Trigger>::SharedFuture future)
   {
     auto response = future.get();
     if (response->success) {
-      std::string raw_instruction = response->message; // Example: "goto living room"
-      RCLCPP_INFO(this->get_logger(), "Instruction received: '%s'", raw_instruction.c_str());
+      std::string raw_instruction = response->message;
+      RCLCPP_INFO(this->get_logger(), "Instruction received from Service: '%s'", raw_instruction.c_str());
 
-      // Parse the string into a TaskStep object
       TaskStep task_step = parse_instruction(raw_instruction);
 
-      // --- STEP 3: SEND TO ACTION SERVER ---
       send_action_goal(task_step);
 
     } else {
@@ -80,26 +78,22 @@ private:
   /*TaskStep parse_instruction(const std::string & raw_str)
   {
     TaskStep step;
-    step.step_id = 1;         // You could use a global counter here
-    step.agent = "Justina";   // Assumed default
+    step.step_id = 1;        
+    step.agent = "Justina";   
 
     std::stringstream ss(raw_str);
     std::string action_part, args_part;
 
-    // Extract the first word as 'action' (e.g., "goto")
     ss >> action_part;
     step.action = action_part;
 
-    // Extract the rest of the line as 'args' (e.g., "living room")
     std::getline(ss, args_part);
 
-    // Trim leading spaces from arguments
     const size_t first = args_part.find_first_not_of(' ');
     if (std::string::npos != first) {
       args_part = args_part.substr(first);
     }
 
-    // If arguments exist, add them to the list
     if (!args_part.empty()) {
       step.args.push_back(args_part);
     }
@@ -124,6 +118,7 @@ private:
     return step;
   }
 
+<<<<<<< HEAD
   step.agent = agent_part;
   step.action = action_part;
 
@@ -145,6 +140,8 @@ private:
 
 
   // --- STEP 3 (DETAIL): SEND GOAL ---
+=======
+>>>>>>> 123a487 (Making task_manager_node working mor than one time)
   void send_action_goal(const TaskStep & step_msg)
   {
     if (!action_client_->wait_for_action_server(2s)) {
@@ -153,8 +150,6 @@ private:
     }
 
     auto goal_msg = ExecuteTask::Goal();
-    
-    // Assigning the TaskStep object to the 'task' field in the Goal
     goal_msg.task = step_msg;
 
     RCLCPP_INFO(this->get_logger(), "Sending Goal -> Action: %s, Args: %s", 
@@ -163,7 +158,6 @@ private:
 
     auto send_goal_options = rclcpp_action::Client<ExecuteTask>::SendGoalOptions();
     
-    // Callback to check if the task finished successfully
     send_goal_options.result_callback = 
       [this](const GoalHandleExecuteTask::WrappedResult & result) {
         if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
@@ -176,7 +170,7 @@ private:
     action_client_->async_send_goal(goal_msg, send_goal_options);
   }
 
-  rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::Subscription<Empty>::SharedPtr subscription_; 
   rclcpp::Client<Trigger>::SharedPtr service_client_;
   rclcpp_action::Client<ExecuteTask>::SharedPtr action_client_;
 };
