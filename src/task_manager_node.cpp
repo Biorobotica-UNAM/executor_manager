@@ -26,7 +26,7 @@ public:
   TaskManagerNode()
   : Node("task_manager_node")
   {
-    service_client_ = this->create_client<Trigger>("request_instruccion");
+    service_client_ = this->create_client<Trigger>("request_instruction");
 
     action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "execute_task");
 
