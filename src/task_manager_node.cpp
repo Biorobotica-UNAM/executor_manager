@@ -3,6 +3,8 @@
 #include <sstream>
 #include <vector>
 #include <chrono>
+#include <algorithm> 
+#include <cctype>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -40,15 +42,20 @@ private:
   void trigger_callback(const Empty::SharedPtr msg)
   {
     (void)msg;
-    RCLCPP_INFO(this->get_logger(), "Trigger received! Starting workflow...");
+    RCLCPP_INFO(this->get_logger(), "Trigger received! Starting AUTOMATIC workflow...");
+    
+    request_next_instruction();
+  }
 
+  void request_next_instruction()
+  {
     if (!service_client_->wait_for_service(1s)) {
-      RCLCPP_ERROR(this->get_logger(), "Service 'request_instruccion' is not available. Try again later.");
+      RCLCPP_ERROR(this->get_logger(), "Service 'request_instruction' not available. Stopping loop.");
       return;
     }
 
     auto request = std::make_shared<Trigger::Request>();
-    RCLCPP_INFO(this->get_logger(), "Calling service 'request_instruccion'...");
+    RCLCPP_INFO(this->get_logger(), "Requesting NEXT instruction...");
 
     service_client_->async_send_request(request, 
       std::bind(&TaskManagerNode::service_response_callback, this, std::placeholders::_1));
@@ -61,40 +68,20 @@ private:
       std::string raw_instruction = response->message;
       RCLCPP_INFO(this->get_logger(), "Instruction received from Service: '%s'", raw_instruction.c_str());
 
-      TaskStep task_step = parse_instruction(raw_instruction);
+      if (raw_instruction == "stop" || raw_instruction.empty()) {
+          RCLCPP_INFO(this->get_logger(), "Stop command received. Workflow finished.");
+          return;
+      }
 
-      send_action_goal(task_step);
+      current_task_ = parse_instruction(raw_instruction);
+      retry_count_ = 0;
+
+      send_action_goal(current_task_);
 
     } else {
       RCLCPP_ERROR(this->get_logger(), "Service responded with success=false.");
     }
   }
-
-  /*TaskStep parse_instruction(const std::string & raw_str)
-  {
-    TaskStep step;
-    step.step_id = 1;        
-    step.agent = "Justina";   
-
-    std::stringstream ss(raw_str);
-    std::string action_part, args_part;
-
-    ss >> action_part;
-    step.action = action_part;
-
-    std::getline(ss, args_part);
-
-    const size_t first = args_part.find_first_not_of(' ');
-    if (std::string::npos != first) {
-      args_part = args_part.substr(first);
-    }
-
-    if (!args_part.empty()) {
-      step.args.push_back(args_part);
-    }
-
-    return step;
-  }*/
 
   TaskStep parse_instruction(const std::string & raw_str)
 {
@@ -114,6 +101,8 @@ private:
   }
 
   step.agent = agent_part;
+  std::transform(action_part.begin(), action_part.end(), action_part.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
   step.action = action_part;
 
   // Guardar el resto como un solo string "tal cual" (sin cambiar living_room)
@@ -144,18 +133,45 @@ private:
     auto goal_msg = ExecuteTask::Goal();
     goal_msg.task = step_msg;
 
-    RCLCPP_INFO(this->get_logger(), "Sending Goal -> Action: %s, Args: %s", 
+    /*RCLCPP_INFO(this->get_logger(), "Sending Goal -> Action: %s, Args: %s", 
       step_msg.action.c_str(), 
-      (step_msg.args.empty() ? "None" : step_msg.args[0].c_str()));
+      (step_msg.args.empty() ? "None" : step_msg.args[0].c_str()));*/
+
+    RCLCPP_INFO(this->get_logger(), "Sending Goal (Attempt %d/%d) -> %s", 
+                retry_count_ + 1, MAX_RETRIES + 1, step_msg.action.c_str());
 
     auto send_goal_options = rclcpp_action::Client<ExecuteTask>::SendGoalOptions();
     
+    send_goal_options.feedback_callback = 
+      [this](GoalHandleExecuteTask::SharedPtr, 
+             const std::shared_ptr<const ExecuteTask::Feedback> feedback) 
+      {
+        RCLCPP_INFO(this->get_logger(), ">> Feedback: %s", feedback->feedback.message.c_str());
+      };
+
     send_goal_options.result_callback = 
       [this](const GoalHandleExecuteTask::WrappedResult & result) {
+        
         if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
-          RCLCPP_INFO(this->get_logger(), "Task completed successfully!");
+          RCLCPP_INFO(this->get_logger(), "Task completed! Requesting NEXT task...");
+          
+          // Succeeded: calling the next instruction
+          this->request_next_instruction(); 
+
         } else {
-          RCLCPP_WARN(this->get_logger(), "Task failed or was canceled.");
+          // FAIL: Retry
+          if (this->retry_count_ < this->MAX_RETRIES) {
+            this->retry_count_++;
+            RCLCPP_WARN(this->get_logger(), "Task failed! Retrying (%d/%d)...", 
+                        this->retry_count_, this->MAX_RETRIES);
+            
+            // Resending the saved task
+            this->send_action_goal(this->current_task_);
+
+          } else {
+            // No more tries
+            RCLCPP_ERROR(this->get_logger(), "Task failed after retries. Stopping workflow.");
+          }
         }
       };
 
@@ -165,6 +181,9 @@ private:
   rclcpp::Subscription<Empty>::SharedPtr subscription_; 
   rclcpp::Client<Trigger>::SharedPtr service_client_;
   rclcpp_action::Client<ExecuteTask>::SharedPtr action_client_;
+  TaskStep current_task_;      // Current task saved
+  int retry_count_ = 0;        // Tries counter
+  const int MAX_RETRIES = 1;   // Max Tries
 };
 
 int main(int argc, char * argv[])
