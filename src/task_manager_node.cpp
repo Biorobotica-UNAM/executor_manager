@@ -30,7 +30,7 @@ public:
   {
     service_client_ = this->create_client<Trigger>("request_instruction");
 
-    action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "execute_task");
+    action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "/executor/execute_task");
 
     subscription_ = this->create_subscription<Empty>(
       "input_trigger", 10, std::bind(&TaskManagerNode::trigger_callback, this, std::placeholders::_1));
