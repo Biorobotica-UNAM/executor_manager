@@ -25,5 +25,10 @@ ament_target_dependencies(task_manager_node
 install(TARGETS
   task_manager_node
   DESTINATION lib/${PROJECT_NAME})
+  
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()
