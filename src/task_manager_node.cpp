@@ -28,12 +28,12 @@ public:
   TaskManagerNode()
   : Node("task_manager_node")
   {
-    service_client_ = this->create_client<Trigger>("request_instruction");
+    service_client_ = this->create_client<Trigger>("/request_instruction");
 
     action_client_ = rclcpp_action::create_client<ExecuteTask>(this, "/executor/execute_task");
 
     subscription_ = this->create_subscription<Empty>(
-      "input_trigger", 10, std::bind(&TaskManagerNode::trigger_callback, this, std::placeholders::_1));
+      "/input_trigger", 10, std::bind(&TaskManagerNode::trigger_callback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "TaskManagerNode initialized. Waiting for signal on topic '/input_trigger'...");
   }
@@ -49,7 +49,7 @@ private:
 
   void request_next_instruction()
   {
-    if (!service_client_->wait_for_service(1s)) {
+    if (!service_client_->wait_for_service(5s)) {
       RCLCPP_ERROR(this->get_logger(), "Service 'request_instruction' not available. Stopping loop.");
       return;
     }
