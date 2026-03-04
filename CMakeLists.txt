@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(task_manager)
+project(executor_manager)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -12,9 +12,9 @@ find_package(std_srvs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(executor_interfaces REQUIRED) 
 
-add_executable(task_manager_node src/task_manager_node.cpp)
+add_executable(executor_manager_node src/executor_manager_node.cpp)
 
-ament_target_dependencies(task_manager_node 
+ament_target_dependencies(executor_manager_node 
   rclcpp 
   std_msgs
   std_srvs
@@ -23,7 +23,7 @@ ament_target_dependencies(task_manager_node
 )
 
 install(TARGETS
-  task_manager_node
+  executor_manager_node
   DESTINATION lib/${PROJECT_NAME})
   
 install(
