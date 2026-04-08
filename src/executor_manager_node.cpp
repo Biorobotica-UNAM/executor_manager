@@ -195,6 +195,17 @@ private:
         }
       };
 
+      options.goal_response_callback = 
+      [this](const GoalHandle::SharedPtr & goal_handle) {
+        if (!goal_handle) {
+          RCLCPP_ERROR(get_logger(), "Goal was rejected by worker!");
+          // AQUÍ ES DONDE PASAS A LA SIGUIENTE PARA QUE NO SE TRABE
+          this->requestNextInstruction(); 
+        } else {
+          RCLCPP_INFO(get_logger(), "Goal accepted :)");
+        }
+      };
+
     action_client_->async_send_goal(goal, options);
   }
 
