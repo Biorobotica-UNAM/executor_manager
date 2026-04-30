@@ -222,6 +222,13 @@ private:
       return;
     }
 
+	if (current_task_.action == "listen" || current_task_.action == "listen_for")
+	{
+	  RCLCPP_WARN(get_logger(), "Listen failed, supervisor will handle retry.");
+	  requestNextInstruction();
+	  return;
+	}
+
     if (retry_count_ < MAX_RETRIES)
     {
       retry_count_++;
