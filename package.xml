@@ -3,21 +3,25 @@
 <package format="3">
   <name>executor_manager</name>
   <version>0.0.1</version>
-  <description>Package to parse instruccions</description>
-  <maintainer email="georgemendez1000@gmail.com">Jorge Mendez</maintainer>
-  <license>TODO</license>
+  <description>Action client for tasks execution</description>
+  <maintainer email="marco.soriano5102@comunidad.unam.mx">Marco Soriano</maintainer>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- C++ / Build -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  
+  <!-- ROS -->
   <depend>std_msgs</depend>
-
   <depend>std_srvs</depend>
 
-  <depend>rclcpp_action</depend>
-
+  <!-- Interfaces -->
   <depend>executor_interfaces</depend>
+  <depend>supervisor_executor_interfaces</depend>
 
+  <!-- Test -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
