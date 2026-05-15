@@ -88,7 +88,6 @@ private:
         }
 
         current_task_ = parseInstruction(response->message);
-        retry_count_  = 0;
         sendGoal();
     }
 
@@ -154,31 +153,24 @@ private:
     }
 
     // =========================================================
-    // Result → authorize → next / retry
+    // Result
     // =========================================================
     void onResult(const GoalHandle::WrappedResult& result)
-    {
-        if (!result.result) {
-            RCLCPP_ERROR(get_logger(), "Null result.");
-            return;
-        }
+	{
+		if (!result.result) {
+		    RCLCPP_ERROR(get_logger(), "Null result.");
+		    return;
+		}
 
-        const auto& task_result = result.result->result;
+		const auto& task_result = result.result->result;
 
-        if (result.code == rclcpp_action::ResultCode::SUCCEEDED &&
-            task_result.status == TaskResult::SUCCESS)
-        {
-            RCLCPP_INFO(get_logger(), "Task SUCCESS: %s",
-                        task_result.message.c_str());
-            requestAuthorize(task_result.message);
-        }
-        else
-        {
-            RCLCPP_WARN(get_logger(), "Task FAILED | status: %u msg: %s",
-                        task_result.status, task_result.message.c_str());
-            handleFailure(task_result.status);
-        }
-    }
+		// SUCCESS o FAILED — en ambos casos el supervisor decide qué sigue
+		RCLCPP_INFO(get_logger(), "Task %s: %s",
+		            task_result.status == TaskResult::SUCCESS ? "SUCCESS" : "FAILED",
+		            task_result.message.c_str());
+
+		requestAuthorize(task_result.message);
+	}
 
     // =========================================================
     // Authorize — pide aprobación al supervisor
@@ -208,41 +200,13 @@ private:
                         requestNextInstruction();
                     } else {
                         RCLCPP_WARN(get_logger(), "Rejected: %s", res->message.c_str());
-                        handleFailure(TaskResult::FAILURE);
+                        requestNextInstruction();
                     }
                 } catch (const std::exception& e) {
                     RCLCPP_ERROR(get_logger(), "Authorize exception: %s", e.what());
-                    handleFailure(TaskResult::FAILURE);
+                    requestNextInstruction();
                 }
             });
-    }
-
-    // =========================================================
-    // Failure handling
-    // =========================================================
-    void handleFailure(uint8_t status)
-    {
-        if (status == TaskResult::ABORTED) {
-            RCLCPP_ERROR(get_logger(), "Task aborted — not retrying.");
-            return;
-        }
-
-        if (current_task_.action == "listen" ||
-            current_task_.action == "listen_for")
-        {
-            RCLCPP_WARN(get_logger(), "Listen failed — supervisor handles retry.");
-            requestNextInstruction();
-            return;
-        }
-
-        if (retry_count_ < MAX_RETRIES) {
-            retry_count_++;
-            RCLCPP_WARN(get_logger(), "Retrying (%d/%d)...",
-                        retry_count_, MAX_RETRIES);
-            sendGoal();
-        } else {
-            RCLCPP_ERROR(get_logger(), "Task failed permanently.");
-        }
     }
 
     // =========================================================
@@ -254,8 +218,6 @@ private:
     rclcpp::Client<AuthorizeTask>::SharedPtr        authorize_client_;
 
     TaskStep current_task_;
-    int      retry_count_ = 0;
-    const int MAX_RETRIES = 1;
 };
 
 int main(int argc, char** argv)
