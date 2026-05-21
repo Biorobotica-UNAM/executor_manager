@@ -78,6 +78,13 @@ private:
     {
         auto response = future.get();
 
+        if (!response->success && response->message == "blocked_by_manager") {
+            RCLCPP_WARN(get_logger(),
+                        "Instruction dispatch blocked by supervisor_plan; retrying shortly.");
+            scheduleInstructionRetry();
+            return;
+        }
+
         if (!response->success || response->message.empty()) {
             RCLCPP_INFO(get_logger(), "No more instructions.");
             return;
@@ -89,6 +96,25 @@ private:
 
         current_task_ = parseInstruction(response->message);
         sendGoal();
+    }
+
+    void scheduleInstructionRetry()
+    {
+        if (instruction_retry_timer_) {
+            instruction_retry_timer_->cancel();
+            instruction_retry_timer_.reset();
+        }
+
+        instruction_retry_timer_ = create_wall_timer(
+            200ms,
+            [this]()
+            {
+                if (instruction_retry_timer_) {
+                    instruction_retry_timer_->cancel();
+                    instruction_retry_timer_.reset();
+                }
+                requestNextInstruction();
+            });
     }
 
     TaskStep parseInstruction(const std::string& raw)
@@ -216,6 +242,7 @@ private:
     rclcpp::Client<Trigger>::SharedPtr              instruction_client_;
     rclcpp_action::Client<ExecuteTask>::SharedPtr   action_client_;
     rclcpp::Client<AuthorizeTask>::SharedPtr        authorize_client_;
+    rclcpp::TimerBase::SharedPtr                    instruction_retry_timer_;
 
     TaskStep current_task_;
 };
