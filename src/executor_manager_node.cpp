@@ -55,6 +55,10 @@ private:
     void triggerCallback(const Empty::SharedPtr)
     {
         RCLCPP_INFO(get_logger(), "Trigger received.");
+        if (action_in_progress_) {
+            RCLCPP_WARN(get_logger(), "Ignoring trigger: an action is already in progress.");
+            return;
+        }
         requestNextInstruction();
     }
 
@@ -63,11 +67,22 @@ private:
     // =========================================================
     void requestNextInstruction()
     {
+        if (action_in_progress_) {
+            RCLCPP_DEBUG(get_logger(), "Skipping instruction request while an action is running.");
+            return;
+        }
+
+        if (instruction_request_pending_) {
+            RCLCPP_DEBUG(get_logger(), "Instruction request already pending.");
+            return;
+        }
+
         if (!instruction_client_->wait_for_service(5s)) {
             RCLCPP_ERROR(get_logger(), "Instruction service unavailable.");
             return;
         }
 
+        instruction_request_pending_ = true;
         instruction_client_->async_send_request(
             std::make_shared<Trigger::Request>(),
             std::bind(&ExecutorManagerNode::instructionCallback,
@@ -76,12 +91,16 @@ private:
 
     void instructionCallback(rclcpp::Client<Trigger>::SharedFuture future)
     {
+        instruction_request_pending_ = false;
         auto response = future.get();
 
         if (!response->success && response->message == "blocked_by_manager") {
-            RCLCPP_WARN(get_logger(),
-                        "Instruction dispatch blocked by supervisor_plan; retrying shortly.");
-            scheduleInstructionRetry();
+            if (!action_in_progress_) {
+                RCLCPP_WARN_THROTTLE(
+                    get_logger(), *get_clock(), 2000,
+                    "Instruction dispatch blocked by supervisor_plan; retrying shortly.");
+                scheduleInstructionRetry();
+            }
             return;
         }
 
@@ -94,25 +113,28 @@ private:
             return;
         }
 
+        cancelInstructionRetry();
         current_task_ = parseInstruction(response->message);
         sendGoal();
     }
 
-    void scheduleInstructionRetry()
+    void cancelInstructionRetry()
     {
         if (instruction_retry_timer_) {
             instruction_retry_timer_->cancel();
             instruction_retry_timer_.reset();
         }
+    }
+
+    void scheduleInstructionRetry()
+    {
+        cancelInstructionRetry();
 
         instruction_retry_timer_ = create_wall_timer(
             200ms,
             [this]()
             {
-                if (instruction_retry_timer_) {
-                    instruction_retry_timer_->cancel();
-                    instruction_retry_timer_.reset();
-                }
+                cancelInstructionRetry();
                 requestNextInstruction();
             });
     }
@@ -147,6 +169,8 @@ private:
             return;
         }
 
+        action_in_progress_ = true;
+
         ExecuteTask::Goal goal;
         goal.task = current_task_;
 
@@ -156,7 +180,7 @@ private:
             [this](const GoalHandle::SharedPtr& gh) {
                 if (!gh) {
                     RCLCPP_ERROR(get_logger(), "Goal rejected by worker.");
-                    requestNextInstruction();
+                    action_in_progress_ = false;
                 } else {
                     RCLCPP_INFO(get_logger(), "Goal accepted.");
                 }
@@ -183,6 +207,9 @@ private:
     // =========================================================
     void onResult(const GoalHandle::WrappedResult& result)
 	{
+        action_in_progress_ = false;
+        cancelInstructionRetry();
+
 		if (!result.result) {
 		    RCLCPP_ERROR(get_logger(), "Null result.");
 		    return;
@@ -223,14 +250,11 @@ private:
                     auto res = future.get();
                     if (res->approved) {
                         RCLCPP_INFO(get_logger(), "Authorized: %s", res->message.c_str());
-                        requestNextInstruction();
                     } else {
                         RCLCPP_WARN(get_logger(), "Rejected: %s", res->message.c_str());
-                        requestNextInstruction();
                     }
                 } catch (const std::exception& e) {
                     RCLCPP_ERROR(get_logger(), "Authorize exception: %s", e.what());
-                    requestNextInstruction();
                 }
             });
     }
@@ -245,6 +269,8 @@ private:
     rclcpp::TimerBase::SharedPtr                    instruction_retry_timer_;
 
     TaskStep current_task_;
+    bool action_in_progress_{false};
+    bool instruction_request_pending_{false};
 };
 
 int main(int argc, char** argv)
